@@ -1,9 +1,6 @@
 package minhash
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/binary"
 	"math"
 	"strings"
 
@@ -14,19 +11,6 @@ const (
 	p1 = uint64(4294967311)
 	p2 = uint64(7562380294967317)
 )
-
-type vector []uint32
-
-func (v vector) signature() string {
-	buf := &bytes.Buffer{}
-	for _, v := range v {
-		binary.Write(buf, binary.LittleEndian, v)
-	}
-
-	return base64.URLEncoding.EncodeToString(buf.Bytes())
-}
-
-type matrix []vector
 
 type hasher func(...uint32) uint32
 
@@ -46,6 +30,7 @@ type MinHasher struct {
 	matrix matrix
 	b      int
 	r      int
+	n      int
 }
 
 func (m *MinHasher) Add(id, s string) {
@@ -89,7 +74,7 @@ func (m *MinHasher) hashColumn(s string) vector {
 	// value of h_i at the ith index of each n-gram
 	column := make(vector, len(m.hashers))
 
-	shingler := text.NewShingler(strings.NewReader(s), 2)
+	shingler := text.NewShingler(strings.NewReader(s), m.n)
 
 	// initialize to max value to find the min
 	for i, _ := range m.hashers {
@@ -141,13 +126,14 @@ func (m *MinHasher) bandMatrix() matrix {
 	return b
 }
 
-func New(b int, r int) *MinHasher {
+func New(b int, r int, n int) *MinHasher {
 	return &MinHasher{
 		hashers:     generateHahsers(b*r, p1),
 		bandHashers: generateHahsers(b, p2),
 		matrix:      make(matrix, 0),
 		r:           r,
 		b:           b,
+		n:           n,
 		ids:         make(map[int]string),
 	}
 }

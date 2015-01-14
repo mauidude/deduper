@@ -26,7 +26,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	m := minhash.New(100, 2)
+	m := minhash.New(100, 2, 2)
 	dir := "/Users/shane/Desktop/dups"
 	files, _ := ioutil.ReadDir(dir)
 
