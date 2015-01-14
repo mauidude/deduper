@@ -1,14 +1,43 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	_ "net/http/pprof"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
+
+	"github.com/mauidude/deduper/minhash"
+)
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
-	m := NewMinHasher(2, 1)
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
-	m.Add("this is a string that we are comparing the minhashes of. hope it works!")
-	m.Add("this is a string that we are comparing the minhashes of. i really hope it works!")
+	m := minhash.New(100, 2)
+	dir := "/Users/shane/Desktop/dups"
+	files, _ := ioutil.ReadDir(dir)
 
-	id := m.FindSimilar("this is a string that we are comparing the minhashes of. hope it works!")
+	for i, file := range files {
+		fmt.Println("Adding", file.Name())
+		path := filepath.Join(dir, file.Name())
+		bytes, _ := ioutil.ReadFile(path)
 
-	fmt.Println("duplicate: ", id)
+		m.Add(path, string(bytes))
+		fmt.Printf("%d/%d\n", i, len(files))
+	}
+
+	//fmt.Println("duplicate: ", id)
 }
