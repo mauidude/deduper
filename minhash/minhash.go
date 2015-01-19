@@ -1,6 +1,7 @@
 package minhash
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -15,8 +16,8 @@ const (
 type hasher func(...uint32) uint32
 
 type Match struct {
-	ID         string
-	Similarity float64
+	ID         string  `json:"id"`
+	Similarity float64 `json:"score"`
 }
 
 type MinHasher struct {
@@ -45,6 +46,9 @@ func (m *MinHasher) FindSimilar(s string, threshold float64) []*Match {
 	col = m.bandColumn(col)
 
 	similar := make([]*Match, 0)
+
+	fmt.Println("Document", s)
+	fmt.Println("Threshold", threshold)
 
 	// for each document in the band matrix
 	for i, c := range b {
