@@ -53,17 +53,4 @@ func main() {
 
 	s := server.New(path, cfg.host, cfg.port)
 	log.Fatal(s.ListenAndServe(cfg.leader))
-
-	/*m := minhash.New(100, 2, 2)
-	dir := "/Users/shane/Desktop/dups"
-	files, _ := ioutil.ReadDir(dir)
-
-	for i, file := range files {
-		fmt.Println("Adding", file.Name())
-		path := filepath.Join(dir, file.Name())
-		bytes, _ := ioutil.ReadFile(path)
-
-		m.Add(path, string(bytes))
-		fmt.Printf("%d/%d\n", i, len(files))
-	}*/
 }

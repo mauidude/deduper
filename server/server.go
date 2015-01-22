@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/goraft/raft"
@@ -145,12 +146,12 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 
 	if sp.Threshold == 0 {
 		sp.Threshold = .8
-	} else if sp.Threshold > 1.0 || sp.Theshold < 0 {
+	} else if sp.Threshold > 1.0 || sp.Threshold < 0 {
 		http.Error(w, `{"errors":["threshold must be between 0 and 1.0 inclusively"]}`, http.StatusBadRequest)
 		return
 	}
 
-	matches := s.minhasher.FindSimilar(sp.Document, sp.Threshold)
+	matches := s.minhasher.FindSimilar(strings.NewReader(sp.Document), sp.Threshold)
 
 	_ = json.NewEncoder(w).Encode(matches)
 }
