@@ -10,28 +10,56 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
+	"github.com/codegangsta/negroni"
 	"github.com/goraft/raft"
 	"github.com/gorilla/mux"
 	"github.com/mauidude/deduper/minhash"
 	"github.com/mauidude/deduper/server/command"
+	"github.com/mauidude/deduper/server/middleware"
 )
 
 var (
 	Logger = log.New(os.Stdout, "[server] ", log.LstdFlags)
+
+	contentTypeJSON = "application/json"
 )
 
+// Server provides an HTTP interface to the deduper.
 type Server struct {
 	path       string
 	host       string
 	port       int
 	name       string
-	httpServer *http.Server
 	raftServer raft.Server
 	router     *mux.Router
 	minhasher  *minhash.MinHasher
+}
+
+// New creates a new Server.
+func New(path string, host string, port int) *Server {
+	s := &Server{
+		path:      path,
+		host:      host,
+		port:      port,
+		router:    mux.NewRouter(),
+		minhasher: minhash.New(100, 2, 2),
+	}
+
+	// Read existing name or generate a new one.
+	namePath := filepath.Join(path, "name")
+	if b, err := ioutil.ReadFile(namePath); err == nil {
+		s.name = string(b)
+	} else {
+		s.name = fmt.Sprintf("%07x", rand.Int())[0:7]
+		if err = ioutil.WriteFile(namePath, []byte(s.name), 0644); err != nil {
+			Logger.Fatalf("Unable to write to name file %s: %s", namePath, err.Error())
+		}
+	}
+
+	return s
 }
 
 // This is a hack around Gorilla mux not providing the correct net/http
@@ -40,6 +68,9 @@ func (s *Server) HandleFunc(pattern string, handler func(http.ResponseWriter, *h
 	s.router.HandleFunc(pattern, handler)
 }
 
+// ListenAndServe starts the server listening on HTTP and
+// connects to the given leader. If leader is an empty string
+// this server will be a leader.
 func (s *Server) ListenAndServe(leader string) error {
 	var err error
 	Logger.Printf("Initializing Raft Server: %s", s.path)
@@ -85,22 +116,25 @@ func (s *Server) ListenAndServe(leader string) error {
 
 	Logger.Println("Initializing HTTP server")
 
-	// Initialize and start HTTP server.
-	s.httpServer = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
-		Handler: s.router,
-	}
-
-	s.router.HandleFunc("/documents/similar", s.readHandler).Methods("POST")
-	s.router.HandleFunc("/documents/{id}", s.writeHandler).Methods("POST")
+	s.router.HandleFunc("/documents/similar", s.similarHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
+	s.router.HandleFunc("/health", s.healthHandler).Methods("GET")
+	route := s.router.HandleFunc("/documents/{id}", s.postHandler).Methods("POST")
+
+	// Initialize and start HTTP server.
+	httpServer := negroni.New()
+
+	httpServer.Use(&middleware.ContentType{contentTypeJSON})
+	httpServer.Use(middleware.NewLeadWrite(s.raftServer, route))
+
+	httpServer.UseHandler(s.router)
 
 	Logger.Println("Listening at:", s.connectionString())
 
-	return s.httpServer.ListenAndServe()
+	return http.ListenAndServe(fmt.Sprintf(":%d", s.port), httpServer)
 }
 
-// Joins to the leader of an existing cluster.
+// Join joins to the leader of an existing cluster.
 func (s *Server) Join(leader string) error {
 	command := &raft.DefaultJoinCommand{
 		Name:             s.raftServer.Name(),
@@ -109,7 +143,7 @@ func (s *Server) Join(leader string) error {
 
 	var b bytes.Buffer
 	json.NewEncoder(&b).Encode(command)
-	resp, err := http.Post(fmt.Sprintf("http://%s/join", leader), "application/json", &b)
+	resp, err := http.Post(fmt.Sprintf("http://%s/join", leader), contentTypeJSON, &b)
 	if err != nil {
 		return err
 	}
@@ -117,6 +151,36 @@ func (s *Server) Join(leader string) error {
 	defer resp.Body.Close()
 
 	return nil
+}
+
+func (s *Server) healthHandler(w http.ResponseWriter, req *http.Request) {
+	type peer struct {
+		ConnectionString string `json:"connection_string"`
+	}
+
+	type health struct {
+		Name   string           `json:"name"`
+		Peers  map[string]*peer `json:"peers"`
+		Leader string           `json:"leader"`
+		State  string           `json:"state"`
+	}
+
+	h := &health{
+		Name:   s.raftServer.Name(),
+		Peers:  make(map[string]*peer),
+		Leader: s.raftServer.Leader(),
+		State:  s.raftServer.State(),
+	}
+
+	for _, p := range s.raftServer.Peers() {
+		peer := &peer{
+			ConnectionString: p.ConnectionString,
+		}
+
+		h.Peers[p.Name] = peer
+	}
+
+	json.NewEncoder(w).Encode(h)
 }
 
 func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
@@ -132,31 +196,31 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
+func (s *Server) similarHandler(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
-	w.Header().Add("Content-Type", "application/json")
 
-	type similarityPost struct {
-		Document  string  `json:document"`
-		Threshold float64 `json:threshold"`
+	threshold := .8
+
+	t := req.URL.Query().Get("threshold")
+	if t != "" {
+		var err error
+		if threshold, err = strconv.ParseFloat(t, 64); err != nil {
+			http.Error(w, `{"errors":["threshold is not a valid float"]}`, http.StatusBadRequest)
+			return
+		}
 	}
 
-	sp := &similarityPost{}
-	json.NewDecoder(req.Body).Decode(sp)
-
-	if sp.Threshold == 0 {
-		sp.Threshold = .8
-	} else if sp.Threshold > 1.0 || sp.Threshold < 0 {
-		http.Error(w, `{"errors":["threshold must be between 0 and 1.0 inclusively"]}`, http.StatusBadRequest)
+	if threshold > 1.0 || threshold < 0 {
+		http.Error(w, `{"errors":["threshold must be between 0 and 1.0 exclusively"]}`, http.StatusBadRequest)
 		return
 	}
 
-	matches := s.minhasher.FindSimilar(strings.NewReader(sp.Document), sp.Threshold)
+	matches := s.minhasher.FindSimilar(req.Body, threshold)
 
 	_ = json.NewEncoder(w).Encode(matches)
 }
 
-func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
+func (s *Server) postHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 
 	// Read the value from the POST body.
@@ -166,20 +230,6 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer req.Body.Close()
-
-	leader := s.raftServer.Leader()
-	// if not leader
-	if leader != s.raftServer.Name() {
-		connString := s.raftServer.Peers()[leader].ConnectionString
-		Logger.Println("not leader, forwarding request to", connString)
-
-		_, err := http.Post(fmt.Sprintf("%s%s", connString, req.URL.Path), req.Header.Get("Content-Type"), bytes.NewBuffer(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-
-		return
-	}
 
 	value := string(b)
 
@@ -193,26 +243,4 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 // Returns the connection string.
 func (s *Server) connectionString() string {
 	return fmt.Sprintf("http://%s:%d", s.host, s.port)
-}
-
-func New(path string, host string, port int) *Server {
-	s := &Server{
-		path:      path,
-		host:      host,
-		port:      port,
-		router:    mux.NewRouter(),
-		minhasher: minhash.New(100, 2, 2),
-	}
-
-	// Read existing name or generate a new one.
-	if b, err := ioutil.ReadFile(filepath.Join(path, "name")); err == nil {
-		s.name = string(b)
-	} else {
-		s.name = fmt.Sprintf("%07x", rand.Int())[0:7]
-		if err = ioutil.WriteFile(filepath.Join(path, "name"), []byte(s.name), 0644); err != nil {
-			panic(err)
-		}
-	}
-
-	return s
 }

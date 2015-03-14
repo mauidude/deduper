@@ -7,12 +7,17 @@ import (
 	"github.com/mauidude/deduper/minhash"
 )
 
+// WriteCommand represents a command to persist a
+// document ID and it's generated minhash value.
 type WriteCommand struct {
-	ID    string `json:"id"`
+	// ID is the document id
+	ID string `json:"id"`
+
+	// Value is the value to be written
 	Value string `json:"value"`
 }
 
-// Creates a new write command.
+// NewWriteCommand creates a new write command.
 func NewWriteCommand(id string, value string) *WriteCommand {
 	return &WriteCommand{
 		ID:    id,
@@ -20,12 +25,12 @@ func NewWriteCommand(id string, value string) *WriteCommand {
 	}
 }
 
-// The name of the command in the log.
+// CommandName returns the name of the command.
 func (c *WriteCommand) CommandName() string {
 	return "write"
 }
 
-// Writes a value to a key.
+// Apply writes a value to a key.
 func (c *WriteCommand) Apply(server raft.Server) (interface{}, error) {
 	mh := server.Context().(*minhash.MinHasher)
 	mh.Add(c.ID, strings.NewReader(c.Value))

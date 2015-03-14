@@ -17,6 +17,7 @@ type config struct {
 	host   string
 	port   int
 	leader string
+	debug  bool
 }
 
 var cfg *config
@@ -27,13 +28,17 @@ func init() {
 	flag.StringVar(&cfg.host, "host", "localhost", "The HTTP host for this server to run on")
 	flag.IntVar(&cfg.port, "port", 8080, "The HTTP port for this server to run on")
 	flag.StringVar(&cfg.leader, "leader", "", "The HTTP host and port of the leader")
+	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logging")
 }
 
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
 
-	//raft.SetLogLevel(raft.Debug)
+	if cfg.debug {
+		raft.SetLogLevel(raft.Debug)
+	}
+
 	raft.RegisterCommand(&command.WriteCommand{})
 
 	rand.Seed(time.Now().UnixNano())
