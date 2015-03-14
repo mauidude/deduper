@@ -8,11 +8,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type RaftServer interface {
+	Leader() string
+	Name() string
+	Peers() map[string]*raft.Peer
+}
+
 // LeaderWrite forwards incoming writes to followers
 // to the leader node.
 type LeaderWrite struct {
-	raftServer raft.Server
-	client     *http.Client
+	Client *http.Client
+
+	raftServer RaftServer
 	routes     []*mux.Route
 }
 
@@ -20,10 +27,10 @@ type LeaderWrite struct {
 // forwarded to the leader in the routes parameter. All redirected
 // requests will append a `X-Follower-Redirect-For` header with the
 // name of the Raft server that initiated the redirect.
-func NewLeadWrite(r raft.Server, routes ...*mux.Route) *LeaderWrite {
+func NewLeadWrite(r RaftServer, routes ...*mux.Route) *LeaderWrite {
 	return &LeaderWrite{
+		Client:     http.DefaultClient,
 		raftServer: r,
-		client:     http.DefaultClient,
 		routes:     routes,
 	}
 }
@@ -52,7 +59,7 @@ func (l *LeaderWrite) ServeHTTP(w http.ResponseWriter, r *http.Request, next htt
 
 		request.Header.Add("X-Follower-Redirect-For", l.raftServer.Name())
 
-		_, err := l.client.Do(request)
+		_, err := l.Client.Do(request)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
