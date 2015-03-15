@@ -39,13 +39,13 @@ type Server struct {
 }
 
 // New creates a new Server.
-func New(path string, host string, port int) *Server {
+func New(path string, host string, port int, mh *minhash.MinHasher) *Server {
 	s := &Server{
 		path:      path,
 		host:      host,
 		port:      port,
 		router:    mux.NewRouter(),
-		minhasher: minhash.New(100, 2, 2),
+		minhasher: mh,
 	}
 
 	// Read existing name or generate a new one.

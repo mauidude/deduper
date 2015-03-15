@@ -8,16 +8,20 @@ import (
 	"time"
 
 	"github.com/goraft/raft"
+	"github.com/mauidude/deduper/minhash"
 	"github.com/mauidude/deduper/server"
 	"github.com/mauidude/deduper/server/command"
 )
 
 type config struct {
-	path   string
-	host   string
-	port   int
-	leader string
-	debug  bool
+	path     string
+	host     string
+	port     int
+	leader   string
+	debug    bool
+	bands    int
+	rows     int
+	shingles int
 }
 
 var cfg *config
@@ -29,6 +33,9 @@ func init() {
 	flag.IntVar(&cfg.port, "port", 8080, "The HTTP port for this server to run on")
 	flag.StringVar(&cfg.leader, "leader", "", "The HTTP host and port of the leader")
 	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logging")
+	flag.IntVar(&cfg.bands, "bands", 100, "Number of bands")
+	flag.IntVar(&cfg.rows, "hashes", 2, "Number of hashes to use")
+	flag.IntVar(&cfg.shingles, "shingles", 2, "Number of shingles")
 }
 
 func main() {
@@ -56,6 +63,8 @@ func main() {
 
 	log.SetFlags(log.LstdFlags)
 
-	s := server.New(path, cfg.host, cfg.port)
+	mh := minhash.New(cfg.bands, cfg.rows, cfg.shingles)
+
+	s := server.New(path, cfg.host, cfg.port, mh)
 	log.Fatal(s.ListenAndServe(cfg.leader))
 }

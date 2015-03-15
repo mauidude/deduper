@@ -28,6 +28,13 @@ godep go build
 - `-leader` The `host:port` of the leader node, if running as a follower. Defaults to leader mode.
 - `-debug` Enables debug output. Defaults to `false`.
 
+The following options will require testing with your document sizes and overall corpus size.
+*If you change these values, you will need to readd all of your documents.*
+
+- `-bands` The number of bands to use in the minhash algorithm. Defaults to `100`.
+- `-hashes` The number of hashes to use in the minhash algorithm. Defaults to `2`.
+- `-shingles` The shingle size to use on the text. Defaults to `2`.
+
 ## Testing
 
 ```sh
