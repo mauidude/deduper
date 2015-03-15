@@ -29,7 +29,7 @@ godep go build
 - `-debug` Enables debug output. Defaults to `false`.
 
 The following options will require testing with your document sizes and overall corpus size.
-*If you change these values, you will need to readd all of your documents.*
+**If you change these values, you will need to readd all of your documents.**
 
 - `-bands` The number of bands to use in the minhash algorithm. Defaults to `100`.
 - `-hashes` The number of hashes to use in the minhash algorithm. Defaults to `2`.
