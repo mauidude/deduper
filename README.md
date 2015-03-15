@@ -70,11 +70,11 @@ value between `0` and `1` where `1` is identical and `0` is no shared content.
 [
     {
         "id": "mydocument.txt",
-        "similarity": .934
+        "similarity": 0.934
     },
     {
         "id": "someotherdocument.txt",
-        "similarity": .85
+        "similarity": 0.85
     }
 ]
 ```
