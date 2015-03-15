@@ -211,7 +211,7 @@ func (s *Server) similarHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if threshold > 1.0 || threshold < 0 {
-		http.Error(w, `{"errors":["threshold must be between 0 and 1.0 exclusively"]}`, http.StatusBadRequest)
+		http.Error(w, `{"errors":["threshold must be between 0 and 1.0 inclusively"]}`, http.StatusBadRequest)
 		return
 	}
 
