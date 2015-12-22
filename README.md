@@ -1,7 +1,9 @@
-# Dedeuper
+# Deduper
 
 An HTTP server that allows you to find near duplicate or similar documents given another document.
 Implements go-raft so it can run as a cluster with other nodes and provide high-availability.
+
+The explanations of the minhash and local sensitivity hashing algorithms used can be found [here](http://okomestudio.net/biboroku/?p=2065).
 
 ## Installation
 
