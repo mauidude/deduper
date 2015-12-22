@@ -103,11 +103,11 @@ func (m *MinHasher) Add(id string, r io.Reader) {
 
 // FindSimilar returns a list of documents whose similarity to the given document
 // is greater than or equal to the threshold provided.
-func (m *MinHasher) FindSimilar(r io.Reader, threshold float64) []*Match {
+func (m *MinHasher) FindSimilar(r io.Reader, threshold float64) []Match {
 	col := m.hashColumn(r)
 	col = m.bandColumn(col)
 
-	similar := make([]*Match, 0)
+	similar := make([]Match, 0)
 
 	m.bandMutex.RLock()
 	if m.bands == nil {
@@ -131,7 +131,7 @@ func (m *MinHasher) FindSimilar(r io.Reader, threshold float64) []*Match {
 				sim := jaccard(c, col)
 
 				if sim >= threshold {
-					similar = append(similar, &Match{
+					similar = append(similar, Match{
 						ID:         m.columnMapping[i],
 						Similarity: sim,
 					})
@@ -185,14 +185,17 @@ func (m *MinHasher) hashColumn(r io.Reader) vector {
 }
 
 func (m *MinHasher) bandColumn(col vector) vector {
-	bcol := make(vector, 0, m.b)
+	bcol := make(vector, m.b)
 
 	for _, hash := range m.bandHashers {
+		j := 0
 		for i := 0; i < len(col); i += m.r {
 			rows := col[i : i+m.r]
 			h := hash(rows...)
 
-			bcol = append(bcol, h)
+			//bcol = append(bcol, h)
+			bcol[j] = h
+			j++
 		}
 	}
 
@@ -203,11 +206,11 @@ func (m *MinHasher) bandMatrix() matrix {
 	m.matrixMutex.RLock()
 	defer m.matrixMutex.RUnlock()
 
-	b := make(matrix, 0, len(m.matrix))
+	b := make(matrix, len(m.matrix))
 
-	for _, col := range m.matrix {
+	for i, col := range m.matrix {
 		bcol := m.bandColumn(col)
-		b = append(b, bcol)
+		b[i] = bcol
 	}
 
 	return b
