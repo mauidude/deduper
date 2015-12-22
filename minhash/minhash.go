@@ -187,15 +187,12 @@ func (m *MinHasher) hashColumn(r io.Reader) vector {
 func (m *MinHasher) bandColumn(col vector) vector {
 	bcol := make(vector, m.b)
 
-	for _, hash := range m.bandHashers {
-		j := 0
-		for i := 0; i < len(col); i += m.r {
-			rows := col[i : i+m.r]
+	for i, hash := range m.bandHashers {
+		for j := 0; j < len(col); j += m.r {
+			rows := col[j : j+m.r]
 			h := hash(rows...)
 
-			//bcol = append(bcol, h)
-			bcol[j] = h
-			j++
+			bcol[i] = h
 		}
 	}
 
